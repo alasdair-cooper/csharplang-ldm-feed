@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/items/">
+    <File Path="Directory.build.props" />
+    <File Path="README.MD" />
+    <File Path="global.json" />
+    <File Path=".gitignore" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/api/AlasdairCooper.CSharpLangLdmFeed.Api.csproj" />
+    <Project Path="src/app-host/AlasdairCooper.CSharpLangLdmFeed.AppHost.csproj" />
+    <Project Path="src/service-defaults/AlasdairCooper.CSharpLangLdmFeed.ServiceDefaults.csproj" />
+  </Folder>
+</Solution>
