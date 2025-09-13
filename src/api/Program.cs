@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using AlasdairCooper.CSharpLangLdmFeed.ServiceDefaults;
 using Humanizer;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.Extensions.Options;
 using Octokit;
 using Scalar.AspNetCore;
@@ -14,6 +15,11 @@ var builder = WebApplication.CreateSlimBuilder(args);
 builder.AddServiceDefaults();
 
 builder.Services.AddOpenApi();
+builder.Services.AddOutputCache();
+
+builder.Services.AddOptions<OutputCacheOptions>()
+    .Configure<IOptions<LdmFeedOptions>>(
+        static (cacheOpts, feedOpts) => cacheOpts.AddBasePolicy(x => x.Expire(TimeSpan.Parse(feedOpts.Value.CacheExpiryTime))));
 
 builder.Services.AddScoped(
     static x =>
@@ -30,6 +36,7 @@ builder.Services.AddOptions<LdmFeedOptions>()
     .Configure(
         static x =>
         {
+            x.CacheExpiryTime = "00:10:00";
             x.DotnetOrgName = "dotnet";
             x.CSharpLangRepoName = "csharplang";
             x.FeedItemsCount = 20;
@@ -52,68 +59,77 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseOutputCache();
 
 app.MapGet(
-    "/feed",
-    static async (GitHubClient gitHubClient, TimeProvider timeProvider, IOptionsSnapshot<LdmFeedOptions> options) =>
-    {
-        var thisYear = timeProvider.GetUtcNow().Year;
+        "/feed",
+        static async (GitHubClient gitHubClient, TimeProvider timeProvider, IOptionsSnapshot<LdmFeedOptions> options, ILogger<Program> logger) =>
+        {
+            var thisYear = timeProvider.GetUtcNow().Year;
 
-        var lastYearsMeetings =
-            await gitHubClient.Repository.Content.GetAllContents(
-                options.Value.DotnetOrgName,
-                options.Value.CSharpLangRepoName,
-                string.Format(options.Value.MeetingsPathTemplate, thisYear - 1));
+            var lastYearsMeetings =
+                await gitHubClient.Repository.Content.GetAllContents(
+                    options.Value.DotnetOrgName,
+                    options.Value.CSharpLangRepoName,
+                    string.Format(options.Value.MeetingsPathTemplate, thisYear - 1));
 
-        var thisYearsMeetings =
-            await gitHubClient.Repository.Content.GetAllContents(
-                options.Value.DotnetOrgName,
-                options.Value.CSharpLangRepoName,
-                string.Format(options.Value.MeetingsPathTemplate, thisYear));
+            var thisYearsMeetings =
+                await gitHubClient.Repository.Content.GetAllContents(
+                    options.Value.DotnetOrgName,
+                    options.Value.CSharpLangRepoName,
+                    string.Format(options.Value.MeetingsPathTemplate, thisYear));
 
-        var meetings =
-            lastYearsMeetings.Concat(thisYearsMeetings)
-                .Where(static x => LdmFeedOptions.LdmNotesRegex().IsMatch(x.Name))
-                .Select(
-                    static x =>
-                    {
-                        var publishedDate = DateTimeOffset.Parse(LdmFeedOptions.LdmNotesRegex().Match(x.Name).Groups[1].Value);
+            var meetings =
+                lastYearsMeetings.Concat(thisYearsMeetings)
+                    .Where(static x => LdmFeedOptions.LdmNotesRegex().IsMatch(x.Name))
+                    .Select(
+                        static x =>
+                        {
+                            var publishedDate = DateTimeOffset.Parse(LdmFeedOptions.LdmNotesRegex().Match(x.Name).Groups[1].Value);
 
-                        return new SyndicationItem(
-                            $"C# Language Design Meeting for {publishedDate:MMMM} {publishedDate.Day.Ordinalize()}, {publishedDate:yyyy}",
-                            "",
-                            new Uri(x.HtmlUrl)) { Id = x.Name, PublishDate = publishedDate };
-                    })
-                .OrderByDescending(static x => x.PublishDate)
-                .Take(options.Value.FeedItemsCount)
-                .ToList();
+                            return new SyndicationItem(
+                                $"C# Language Design Meeting for {publishedDate:MMMM} {publishedDate.Day.Ordinalize()}, {publishedDate:yyyy}",
+                                "",
+                                new Uri(x.HtmlUrl)) { Id = x.Name, PublishDate = publishedDate };
+                        })
+                    .OrderByDescending(static x => x.PublishDate)
+                    .Take(options.Value.FeedItemsCount)
+                    .ToList();
 
-        var feed = new SyndicationFeed("C# LDMs", "C# Language Design Meeting notes.", new Uri(options.Value.LdmHomePage), meetings);
+            var feed = new SyndicationFeed("C# LDMs", "C# Language Design Meeting notes.", new Uri(options.Value.LdmHomePage), meetings);
 
-        var settings =
-            new XmlWriterSettings
-            {
-                Encoding = Encoding.UTF8,
-                NewLineHandling = NewLineHandling.Entitize,
-                NewLineOnAttributes = true,
-                Indent = true,
-                Async = true
-            };
+            var settings =
+                new XmlWriterSettings
+                {
+                    Encoding = Encoding.UTF8,
+                    NewLineHandling = NewLineHandling.Entitize,
+                    NewLineOnAttributes = true,
+                    Indent = true,
+                    Async = true
+                };
 
-        using var stream = new MemoryStream();
-        await using var xmlWriter = XmlWriter.Create(stream, settings);
+            using var stream = new MemoryStream();
+            await using var xmlWriter = XmlWriter.Create(stream, settings);
 
-        var rssFormatter = new Rss20FeedFormatter(feed);
-        rssFormatter.WriteTo(xmlWriter);
-        xmlWriter.Flush();
+            var rssFormatter = new Rss20FeedFormatter(feed);
+            rssFormatter.WriteTo(xmlWriter);
+            xmlWriter.Flush();
+            
+            logger.LogInformation("Retrieving {itemCount} items in feed", feed.Items.Count());
 
-        return Results.File(stream.ToArray(), "application/rss+xml; charset=utf-8");
-    });
+            return Results.File(stream.ToArray(), "application/rss+xml; charset=utf-8");
+        })
+    .WithName("Feed")
+    .WithSummary("C# LDM notes feed")
+    .CacheOutput();
 
 app.Run();
 
 public partial class LdmFeedOptions
 {
+    [Required]
+    public required string CacheExpiryTime { get; set; }
+
     [Range(1, 100)]
     public int FeedItemsCount { get; set; }
 
