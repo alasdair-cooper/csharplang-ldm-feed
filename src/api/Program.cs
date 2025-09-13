@@ -28,7 +28,9 @@ builder.Services.AddScoped(
             Credentials = new Credentials(x.GetRequiredService<IOptions<GithubApiOptions>>().Value.Token)
         });
 
-builder.Services.AddOptions<GithubApiOptions>().ValidateOnStart().BindConfiguration("GitHubApi");
+builder.Services.AddOptions<GithubApiOptions>()
+    .Configure<IConfiguration>(static (opts, config) => opts.Token = config.GetValue<string>("GITHUB_API_TOKEN")!)
+    .ValidateOnStart();
 
 builder.Services.AddSingleton<IValidateOptions<GithubApiOptions>, ValidateGitHubApiOptions>();
 
@@ -114,7 +116,7 @@ app.MapGet(
             var rssFormatter = new Rss20FeedFormatter(feed);
             rssFormatter.WriteTo(xmlWriter);
             xmlWriter.Flush();
-            
+
             logger.LogInformation("Retrieving {itemCount} items in feed", feed.Items.Count());
 
             return Results.File(stream.ToArray(), "application/rss+xml; charset=utf-8");
