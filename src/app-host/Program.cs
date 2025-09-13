@@ -1,5 +1,7 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddProject<Projects.AlasdairCooper_CSharpLangLdmFeed_Api>("api");
+var gitHubApiTokenParameter = builder.AddParameter("github-api-token", true);
+
+builder.AddProject<Projects.AlasdairCooper_CSharpLangLdmFeed_Api>("api").WithEnvironment("GitHubApi:Token", gitHubApiTokenParameter);
 
 builder.Build().Run();

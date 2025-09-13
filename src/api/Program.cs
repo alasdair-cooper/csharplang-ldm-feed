@@ -15,7 +15,16 @@ builder.AddServiceDefaults();
 
 builder.Services.AddOpenApi();
 
-builder.Services.AddScoped(static _ => new GitHubClient(new ProductHeaderValue("csharplang-ldm-feed")));
+builder.Services.AddScoped(
+    static x =>
+        new GitHubClient(new ProductHeaderValue("csharplang-ldm-feed"))
+        {
+            Credentials = new Credentials(x.GetRequiredService<IOptions<GithubApiOptions>>().Value.Token)
+        });
+
+builder.Services.AddOptions<GithubApiOptions>().ValidateOnStart().BindConfiguration("GitHubApi");
+
+builder.Services.AddSingleton<IValidateOptions<GithubApiOptions>, ValidateGitHubApiOptions>();
 
 builder.Services.AddOptions<LdmFeedOptions>()
     .Configure(
@@ -26,7 +35,8 @@ builder.Services.AddOptions<LdmFeedOptions>()
             x.FeedItemsCount = 20;
             x.MeetingsPathTemplate = "meetings/{0}";
             x.LdmHomePage = "https://github.com/dotnet/csharplang/tree/main/meetings";
-        }).ValidateOnStart();
+        })
+    .ValidateOnStart();
 
 builder.Services.AddSingleton<IValidateOptions<LdmFeedOptions>, ValidateLdmFeedOptions>();
 
@@ -125,3 +135,12 @@ public partial class LdmFeedOptions
 
 [OptionsValidator]
 public partial class ValidateLdmFeedOptions : IValidateOptions<LdmFeedOptions>;
+
+public class GithubApiOptions
+{
+    [Required]
+    public required string Token { get; set; }
+}
+
+[OptionsValidator]
+public partial class ValidateGitHubApiOptions : IValidateOptions<GithubApiOptions>;
