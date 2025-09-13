@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: csharplang-ldm-feed
+services:  
+  app:
+    language: dotnet
+    project: ./src/app-host/AlasdairCooper.CSharpLangLdmFeed.AppHost.csproj
+    host: containerapp
