@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 using Octokit;
 using Scalar.AspNetCore;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateSlimBuilder(args);
 
 builder.AddServiceDefaults();
 
@@ -26,11 +26,12 @@ builder.Services.AddOptions<LdmFeedOptions>()
             x.FeedItemsCount = 20;
             x.MeetingsPathTemplate = "meetings/{0}";
             x.LdmHomePage = "https://github.com/dotnet/csharplang/tree/main/meetings";
-        })
-    .ValidateOnStart()
-    .ValidateDataAnnotations();
+        }).ValidateOnStart();
+
+builder.Services.AddSingleton<IValidateOptions<LdmFeedOptions>, ValidateLdmFeedOptions>();
 
 builder.WebHost.ConfigureKestrel(static x => x.AddServerHeader = false);
+builder.WebHost.UseKestrelHttpsConfiguration();
 
 var app = builder.Build();
 
@@ -101,7 +102,7 @@ app.MapGet(
 
 app.Run();
 
-internal partial class LdmFeedOptions
+public partial class LdmFeedOptions
 {
     [Range(1, 100)]
     public int FeedItemsCount { get; set; }
@@ -121,3 +122,6 @@ internal partial class LdmFeedOptions
     [GeneratedRegex("LDM-([0-9]{4}-[0-9]{2}-[0-9]{2}).md")]
     public static partial Regex LdmNotesRegex();
 }
+
+[OptionsValidator]
+public partial class ValidateLdmFeedOptions : IValidateOptions<LdmFeedOptions>;
