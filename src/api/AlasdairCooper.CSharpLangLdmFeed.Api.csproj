@@ -13,9 +13,10 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Aspire.Azure.Data.Tables" Version="9.4.2" />
-        <PackageReference Include="Octokit.Webhooks.AspNetCore" Version="3.2.1" />
+        <PackageReference Include="Humanizer" Version="3.0.0-beta.96" />
+        <PackageReference Include="Octokit" Version="14.0.0" />
         <PackageReference Include="Scalar.AspNetCore.Microsoft" Version="2.8.2"/>
+        <PackageReference Include="System.ServiceModel.Syndication" Version="10.0.0-rc.1.25451.107" />
     </ItemGroup>
 
 </Project>

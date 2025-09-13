@@ -1,20 +1,34 @@
+using System.ComponentModel.DataAnnotations;
+using System.ServiceModel.Syndication;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Xml;
 using AlasdairCooper.CSharpLangLdmFeed.ServiceDefaults;
-using Azure;
-using Azure.Data.Tables;
-using Octokit.Webhooks;
-using Octokit.Webhooks.AspNetCore;
-using Octokit.Webhooks.Events;
+using Humanizer;
+using Microsoft.Extensions.Options;
+using Octokit;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-builder.AddAzureTableServiceClient("tables");
-
 builder.Services.AddOpenApi();
 
-builder.Services.AddScoped<WebhookEventProcessor, PushWebhookEventProcessor>();
+builder.Services.AddScoped(static _ => new GitHubClient(new ProductHeaderValue("csharplang-ldm-feed")));
+
+builder.Services.AddOptions<LdmFeedOptions>()
+    .Configure(
+        static x =>
+        {
+            x.DotnetOrgName = "dotnet";
+            x.CSharpLangRepoName = "csharplang";
+            x.FeedItemsCount = 20;
+            x.MeetingsPathTemplate = "meetings/{0}";
+            x.LdmHomePage = "https://github.com/dotnet/csharplang/tree/main/meetings";
+        })
+    .ValidateOnStart()
+    .ValidateDataAnnotations();
 
 builder.WebHost.ConfigureKestrel(static x => x.AddServerHeader = false);
 
@@ -30,59 +44,80 @@ app.UseHttpsRedirection();
 
 app.MapGet(
     "/feed",
-    static async (TableServiceClient tableServiceClient, CancellationToken cancellationToken) =>
+    static async (GitHubClient gitHubClient, TimeProvider timeProvider, IOptionsSnapshot<LdmFeedOptions> options) =>
     {
-        var tableClient = tableServiceClient.GetTableClient("meetings");
-        await tableClient.CreateIfNotExistsAsync(cancellationToken);
+        var thisYear = timeProvider.GetUtcNow().Year;
+
+        var lastYearsMeetings =
+            await gitHubClient.Repository.Content.GetAllContents(
+                options.Value.DotnetOrgName,
+                options.Value.CSharpLangRepoName,
+                string.Format(options.Value.MeetingsPathTemplate, thisYear - 1));
+
+        var thisYearsMeetings =
+            await gitHubClient.Repository.Content.GetAllContents(
+                options.Value.DotnetOrgName,
+                options.Value.CSharpLangRepoName,
+                string.Format(options.Value.MeetingsPathTemplate, thisYear));
 
         var meetings =
-            await tableClient.QueryAsync<LdmEntity>(static x => x.PartitionKey == "meeting", cancellationToken: cancellationToken)
-                .OrderByDescending(static x => x.Timestamp)
-                .ToListAsync(cancellationToken);
+            lastYearsMeetings.Concat(thisYearsMeetings)
+                .Where(static x => LdmFeedOptions.LdmNotesRegex().IsMatch(x.Name))
+                .Select(
+                    static x =>
+                    {
+                        var publishedDate = DateTimeOffset.Parse(LdmFeedOptions.LdmNotesRegex().Match(x.Name).Groups[1].Value);
 
-        return Results.Ok(meetings.Select(static x => x.FileName));
+                        return new SyndicationItem(
+                            $"C# Language Design Meeting for {publishedDate:MMMM} {publishedDate.Day.Ordinalize()}, {publishedDate:yyyy}",
+                            "",
+                            new Uri(x.HtmlUrl)) { Id = x.Name, PublishDate = publishedDate };
+                    })
+                .OrderByDescending(static x => x.PublishDate)
+                .Take(options.Value.FeedItemsCount)
+                .ToList();
+
+        var feed = new SyndicationFeed("C# LDMs", "C# Language Design Meeting notes.", new Uri(options.Value.LdmHomePage), meetings);
+
+        var settings =
+            new XmlWriterSettings
+            {
+                Encoding = Encoding.UTF8,
+                NewLineHandling = NewLineHandling.Entitize,
+                NewLineOnAttributes = true,
+                Indent = true,
+                Async = true
+            };
+
+        using var stream = new MemoryStream();
+        await using var xmlWriter = XmlWriter.Create(stream, settings);
+
+        var rssFormatter = new Rss20FeedFormatter(feed);
+        rssFormatter.WriteTo(xmlWriter);
+        xmlWriter.Flush();
+
+        return Results.File(stream.ToArray(), "application/rss+xml; charset=utf-8");
     });
-
-app.MapGitHubWebhooks("/github");
 
 app.Run();
 
-internal sealed class PushWebhookEventProcessor(
-    TableServiceClient tableServiceClient,
-    TimeProvider timeProvider,
-    ILogger<PushWebhookEventProcessor> logger) : WebhookEventProcessor
+internal partial class LdmFeedOptions
 {
-    protected override async ValueTask ProcessPushWebhookAsync(
-        WebhookHeaders headers,
-        PushEvent pushEvent,
-        CancellationToken cancellationToken = default)
-    {
-        var currentYear = timeProvider.GetUtcNow().Year;
-        var addedMeetings = pushEvent.Commits.SelectMany(static x => x.Added).Where(x => x.StartsWith($"meetings/{currentYear}"));
+    [Range(1, 100)]
+    public int FeedItemsCount { get; set; }
 
-        var tableClient = tableServiceClient.GetTableClient("meetings");
-        await tableClient.CreateIfNotExistsAsync(cancellationToken);
+    [Required]
+    public required string DotnetOrgName { get; set; }
 
-        foreach (var fileName in addedMeetings)
-        {
-            await tableClient.AddEntityAsync(LdmEntity.New(fileName), cancellationToken);
-            logger.LogInformation("Added new LDM: {ldmFileName}", fileName);
-        }
-    }
-}
+    [Required]
+    public required string CSharpLangRepoName { get; set; }
 
-internal class LdmEntity : ITableEntity
-{
-    public required string PartitionKey { get; set; }
+    [Required]
+    public required string MeetingsPathTemplate { get; set; }
 
-    public required string RowKey { get; set; }
+    [Required]
+    public required string LdmHomePage { get; set; }
 
-    public required string FileName { get; init; }
-
-    public DateTimeOffset? Timestamp { get; set; }
-
-    public ETag ETag { get; set; }
-
-    public static LdmEntity New(string fileName) =>
-        new() { PartitionKey = "meeting", RowKey = Guid.CreateVersion7().ToString(), FileName = fileName };
+    [GeneratedRegex("LDM-([0-9]{4}-[0-9]{2}-[0-9]{2}).md")]
+    public static partial Regex LdmNotesRegex();
 }
