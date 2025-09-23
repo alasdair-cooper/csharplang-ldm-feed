@@ -1,0 +1,26 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Copy files to VPS
+        run: |
+          rsync -avz --exclude='.git*' --exclude='artifacts/' --exclude='obj/' ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:~/csharplang-ldm-feed/
+
+      - name: Deploy with Podman Compose
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'cd ~/csharplang-ldm-feed && podman compose pull && podman compose up -d'
