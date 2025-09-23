@@ -19,8 +19,8 @@ jobs:
 
       - name: Copy files to VPS
         run: |
-          rsync -avz --exclude='.git*' --exclude='artifacts/' --exclude='obj/' ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:~/csharplang-ldm-feed/
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no" --exclude='.git*' --exclude='artifacts/' --exclude='obj/' ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:~/csharplang-ldm-feed/
 
       - name: Deploy with Podman Compose
         run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'cd ~/csharplang-ldm-feed && podman compose pull && podman compose up -d'
+          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} 'cd ~/csharplang-ldm-feed && podman compose pull && podman compose up -d'
