@@ -48,5 +48,10 @@ jobs:
           rsync -avz -e "ssh -o StrictHostKeyChecking=no" --exclude='.git*' --exclude='artifacts/' --exclude='obj/' ./ $SSH_DESTINATION:~/csharplang-ldm-feed/
 
       - name: Deploy with Podman Compose
-        run: |
-          ssh -o StrictHostKeyChecking=no $SSH_DESTINATION "cd ~/csharplang-ldm-feed && podman login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }} && $COMPOSE_ENV podman compose pull && $COMPOSE_ENV podman compose up -d"
+        run: >
+          ssh -o StrictHostKeyChecking=no $SSH_DESTINATION "
+          cd ~/csharplang-ldm-feed 
+          && podman login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }} 
+          && $COMPOSE_ENV podman compose pull 
+          && $COMPOSE_ENV podman compose up --force-recreate --build -d 
+          && docker image prune -f"
