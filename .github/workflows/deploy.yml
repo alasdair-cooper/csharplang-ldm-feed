@@ -8,6 +8,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     env:
       API_IMAGE_NAME: ${{ vars.API_IMAGE_NAME }}
       SSH_DESTINATION: '${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}'
