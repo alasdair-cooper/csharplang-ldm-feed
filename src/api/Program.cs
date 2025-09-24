@@ -38,7 +38,7 @@ builder.Services.AddOptions<LdmFeedOptions>()
     .Configure(
         static x =>
         {
-            x.CacheExpiryTime = "00:10:00";
+            x.CacheExpiryTime = "00:00:00";
             x.DotnetOrgName = "dotnet";
             x.CSharpLangRepoName = "csharplang";
             x.FeedItemsCount = 20;
