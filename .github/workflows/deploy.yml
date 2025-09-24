@@ -57,4 +57,4 @@ jobs:
           && podman login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }} 
           && podman compose pull 
           && podman compose up --force-recreate --build -d 
-          && docker image prune -f"
+          && podman image prune -f"
