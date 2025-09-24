@@ -8,8 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      API_IMAGE_NAME: ${{ vars.API_IMAGE_NAME }}
     steps:
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -22,14 +20,13 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
-          tags: $API_IMAGE_NAME
+          tags: ${{ vars.API_IMAGE_NAME }}
           file: src/api/Dockerfile
 
   deploy:
     runs-on: ubuntu-latest
     needs: build
     env:
-      API_IMAGE_NAME: ${{ vars.API_IMAGE_NAME }}
       SSH_DESTINATION: '${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}'
       COMPOSE_ENV: 'API_IMAGE="${{ vars.API_IMAGE_NAME }}" GITHUB_API_TOKEN="${{ secrets.GH_API_TOKEN }}"'
     steps:
