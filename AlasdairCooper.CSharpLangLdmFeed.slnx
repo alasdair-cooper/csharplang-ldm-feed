@@ -4,6 +4,7 @@
     <File Path="README.MD" />
     <File Path="global.json" />
     <File Path=".gitignore" />
+    <File Path=".dockerignore" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/api/AlasdairCooper.CSharpLangLdmFeed.Api.csproj" />
