@@ -26,4 +26,3 @@ services:
 networks:
   aspire:
     driver: "bridge"
-    external: true
