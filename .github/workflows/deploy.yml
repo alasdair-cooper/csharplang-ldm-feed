@@ -45,15 +45,15 @@ jobs:
 
       - name: Copy files to VPS
         run: |
-          rsync -avz -e "ssh -o StrictHostKeyChecking=no" --exclude='.git*' --exclude='artifacts/' --exclude='obj/' ./ $VPS_SSH_DESTINATION:~/csharplang-ldm-feed/
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no" --exclude='.git*' --exclude='artifacts/' --exclude='obj/' ./ ${{ vars.VPS_SSH_DESTINATION }}:~/csharplang-ldm-feed/
           
       - name: Write .env file
         run: |
-          ssh -o StrictHostKeyChecking=no $VPS_SSH_DESTINATION "echo '${{ secrets.COMPOSE_ENV }}' > ~/csharplang-ldm-feed/.env"
+          ssh -o StrictHostKeyChecking=no ${{ vars.VPS_SSH_DESTINATION }} "echo '${{ secrets.COMPOSE_ENV }}' > ~/csharplang-ldm-feed/.env"
 
       - name: Deploy with Podman Compose
         run: >
-          ssh -o StrictHostKeyChecking=no $VPS_SSH_DESTINATION "
+          ssh -o StrictHostKeyChecking=no ${{ vars.VPS_SSH_DESTINATION }} "
           cd ~/csharplang-ldm-feed 
           && podman login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }} 
           && podman compose pull 
