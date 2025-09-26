@@ -56,8 +56,6 @@ jobs:
           ssh -o StrictHostKeyChecking=no ${{ vars.VPS_SSH_DESTINATION }} "
           cd ~/csharplang-ldm-feed
           && podman login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
-          && podman compose pull 
-          && podman compose down 
-          && podman network prune -f
-          && podman compose up -d 
+          && podman compose pull  
+          && podman compose up --force-recreate --build -d 
           && podman image prune -f"
