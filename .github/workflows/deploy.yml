@@ -69,7 +69,7 @@ jobs:
       - name: deploy to podman
         run: >
           ssh -o StrictHostKeyChecking=no ${{ env.VPS_SSH_DESTINATION }} "
-          cd ~/csharplang-ldm-feed
+          cd ${{ env.VPS_DEPLOY_DIR }}
           && podman login ghcr.io -u ${{ env.ACTOR }} -p ${{ env.TOKEN }}
           && podman compose pull  
           && podman compose up --force-recreate --build -d 
